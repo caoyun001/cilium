@@ -79,3 +79,7 @@ test/cilium.conf.ginkgo
 # Not to be ignored by docker.
 GIT_VERSION
 BPF_SRCFILES
+
+# During image builds following files get created
+.buildx
+.buildx_builder
