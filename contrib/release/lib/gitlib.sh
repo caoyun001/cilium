@@ -49,49 +49,6 @@ declare -A VER_REGEX=([release]="v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9
 ###############################################################################
 
 ###############################################################################
-# Attempt to authenticate to github using ssh and if unsuccessful provide
-# guidance for setup
-#
-gitlib::ssh_auth () {
-
-  logecho -n "Checking ssh auth to github.com: "
-  if ssh -T ${CILIUM_GITHUB_SSH%%:*} 2>&1 |fgrep -wq denied; then
-    logecho $FAILED
-    logecho
-    logecho "See https://help.github.com/categories/ssh"
-    return 1
-  fi
-
-  logecho $OK
-}
-
-
-###############################################################################
-# Check if authenticated (GITHUB_TOKEN) user is a repo admin.
-# Repo admins always have access to push to any restricted branch.
-# See: https://github.com/cilium/cilium/settings/branches
-#
-# returns 1 if authenticated user is NOT a repo admin
-gitlib::is_repo_admin () {
-  local result
-
-  logecho -n "Checking repo admin state: "
-  result=$($GHCURL $CILIUM_GITHUB_API | jq -r '.permissions.admin')
-
-  if [[ $result == "true" ]]; then
-    logecho $OK
-    return 0
-  else
-    logecho $FAILED
-    logecho
-    logecho "You must be a repo admin to continue."
-    logecho "1. Ensure you are a member"
-    logecho "2. Use the 'Request to Join'"
-    return 1
-  fi
-}
-
-###############################################################################
 # Looks up the list of releases on github and puts the last release per branch
 # into a global branch-indexed dictionary LAST_RELEASE[$branch]
 #
@@ -143,34 +100,6 @@ gitlib::current_branch () {
 }
 
 ###############################################################################
-# Show the pending/open PRs on a branch
-# @param branch
-# returns 1 if current working directory is not git repository
-gitlib::pending_prs () {
-  local branch=$1
-  local pr
-  local login
-  local date
-  local msg
-  local sep
-
-  if ((FLAGS_htmlize_md)); then
-    echo "PR | Milestone | User | Date | Commit Message"
-    echo "-- | --------- | ---- | ---- | --------------"
-    sep="|"
-  fi
-
-  while read pr milestone login date msg; do
-    # "escape" '*' in commit messages so they don't mess up formatting.
-    msg=$(echo $msg |sed 's, *\* *, * ,g')
-    printf "%-8s $sep %-4s $sep %-10s $sep %-18s $sep %s\n" \
-           "#$pr" "$milestone" "@$login" "$(date +"%F %R" -d "$date")" "$msg"
-  done < <($GHCURL $CILIUM_GITHUB_API/pulls\?state\=open\&base\=$branch |\
-           jq -r \
-            '.[] | "\(.number)\t\(.milestone.title)\t\(.user.login)\t\(.updated_at)\t\(.title)"')
-}
-
-###############################################################################
 # Validates github token using the standard $GITHUB_TOKEN in your env
 # returns 0 if token is valid
 # returns 1 if token is invalid
@@ -192,73 +121,4 @@ gitlib::github_api_token () {
     common::exit 1
   fi
   logecho -r "$OK"
-}
-
-##############################################################################
-# Git repo sync
-# @param repo - full git url
-# @param dest - destination directory
-gitlib::sync_repo () {
-  local repo=$1
-  local dest=$2
-
-  logecho -n "Syncing ${repo##*/} to $dest: "
-  if [[ -d $dest ]]; then
-    (
-    cd $dest
-    logrun git checkout master
-    logrun -s git pull
-    ) || return 1
-  else
-    logrun -s git clone $repo $dest || return 1
-  fi
-}
-
-##############################################################################
-# Does git branch exist?
-# @param branch - branch
-gitlib::branch_exists () {
-  local branch=$1
-
-  git ls-remote --exit-code $CILIUM_GITHUB_URL \
-   refs/heads/$branch &>/dev/null
-}
-
-##############################################################################
-# Fetch, rebase and push master.
-gitlib::push_master () {
-  local dryrun_flag=" --dry-run"
-  ((FLAGS_nomock)) && dryrun_flag=""
-
-  logecho -n "Checkout master branch to push objects: "
-  logrun -s git checkout master || return 1
-
-  logecho -n "Rebase master branch: "
-  logrun git fetch origin || return 1
-  logrun -s git rebase origin/master || return 1
-  logecho -n "Pushing$dryrun_flag master branch: "
-  logrun -s git push$dryrun_flag origin master || return 1
-}
-
-##############################################################################
-# Ensure TOOL_ROOT running with a synced repo.
-# 
-gitlib::repo_state () {
-  local branch=$(gitlib::current_branch $TOOL_ROOT) || return 1
-  local remote=$(git -C $TOOL_ROOT remote -v |\
-                 awk '/kubernetes\/release(.git)* \(fetch\)/ {print $1}')
-  local commit=$(git -C $TOOL_ROOT \
-                     ls-remote --heads $remote refs/heads/master | cut -f1)
-  local output=$(git -C $TOOL_ROOT branch --contains $commit $branch 2>&-)
-
-  logecho -n "Checking $TOOL_ROOT state: "
-  if [[ -n "$output" ]]; then
-    logecho $OK
-  else
-    logecho "$FAILED"
-    logecho
-    logecho "$TOOL_ROOT is not up to date."
-    logecho "$ git pull # to try again"
-    return 1
-  fi
 }
