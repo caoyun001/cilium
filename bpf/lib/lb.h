@@ -377,14 +377,22 @@ static __always_inline int lb6_extract_key(struct __ctx_buff *ctx __maybe_unused
 }
 
 static __always_inline
-struct lb6_service *lb6_lookup_service(struct lb6_key *key)
+struct lb6_service *lb6_lookup_service(struct lb6_key *key,
+				       const bool scope_switch)
 {
 	struct lb6_service *svc;
 
+	key->scope = LB_LOOKUP_SCOPE_EXT;
 	key->slave = 0;
 	svc = map_lookup_elem(&LB6_SERVICES_MAP_V2, key);
-	if (svc && svc->count != 0)
-		return svc;
+	if (svc) {
+		if (!scope_switch || !svc->local_scope)
+			return svc->count ? svc : NULL;
+		key->scope = LB_LOOKUP_SCOPE_INT;
+		svc = map_lookup_elem(&LB6_SERVICES_MAP_V2, key);
+		if (svc && svc->count)
+			return svc;
+	}
 
 	return NULL;
 }
@@ -650,7 +658,7 @@ static __always_inline int lb6_local(const void *map, struct __ctx_buff *ctx,
 	 */
 	if (!(backend = lb6_lookup_backend(ctx, state->backend_id))) {
 		key->slave = 0;
-		if (!(svc = lb6_lookup_service(key))) {
+		if (!(svc = lb6_lookup_service(key, false))) {
 			goto drop_no_service;
 		}
 		slave = lb6_select_slave(svc->count);
@@ -691,7 +699,8 @@ drop_no_service:
  * additional map management.
  */
 static __always_inline
-struct lb6_service *lb6_lookup_service(struct lb6_key *key __maybe_unused)
+struct lb6_service *lb6_lookup_service(struct lb6_key *key __maybe_unused,
+				       const bool scope_switch __maybe_unused)
 {
 	return NULL;
 }
@@ -832,14 +841,23 @@ static __always_inline int lb4_extract_key(struct __ctx_buff *ctx __maybe_unused
 }
 
 static __always_inline
-struct lb4_service *lb4_lookup_service(struct lb4_key *key)
+struct lb4_service *lb4_lookup_service(struct lb4_key *key,
+				       const bool scope_switch)
 {
 	struct lb4_service *svc;
 
+	key->scope = LB_LOOKUP_SCOPE_EXT;
 	key->slave = 0;
 	svc = map_lookup_elem(&LB4_SERVICES_MAP_V2, key);
-	if (svc && svc->count != 0)
-		return svc;
+	if (svc) {
+		if (!scope_switch || !svc->local_scope)
+			return svc->count ? svc : NULL;
+		key->scope = LB_LOOKUP_SCOPE_INT;
+		svc = map_lookup_elem(&LB4_SERVICES_MAP_V2, key);
+		if (svc && svc->count)
+			return svc;
+	}
+
 	return NULL;
 }
 
@@ -1131,7 +1149,7 @@ static __always_inline int lb4_local(const void *map, struct __ctx_buff *ctx,
 	 */
 	if (!(backend = lb4_lookup_backend(ctx, state->backend_id))) {
 		key->slave = 0;
-		if (!(svc = lb4_lookup_service(key))) {
+		if (!(svc = lb4_lookup_service(key, false))) {
 			goto drop_no_service;
 		}
 		slave = lb4_select_slave(svc->count);

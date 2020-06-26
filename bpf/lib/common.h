@@ -364,6 +364,10 @@ enum {
 #define REASON_LB_REVNAT_UPDATE	7
 #define REASON_LB_REVNAT_STALE	8
 
+/* Lookup scope for externalTrafficPolicy=Local */
+#define LB_LOOKUP_SCOPE_EXT	0
+#define LB_LOOKUP_SCOPE_INT	1
+
 /* Cilium metrics direction for dropping/forwarding packet */
 #define METRIC_INGRESS  1
 #define METRIC_EGRESS   2
@@ -574,7 +578,8 @@ struct lb6_key {
 	__be16 dport;		/* L4 port filter, if unset, all ports apply */
 	__u16 slave;		/* Backend iterator, 0 indicates the master service */
 	__u8 proto;		/* L4 protocol, currently not used (set to 0) */
-	__u8 pad[3];
+	__u8 scope;		/* LB_LOOKUP_SCOPE_* for externalTrafficPolicy=Local */
+	__u8 pad[2];
 };
 
 /* See lb4_service comments */
@@ -626,7 +631,8 @@ struct lb4_key {
 	__be16 dport;		/* L4 port filter, if unset, all ports apply */
 	__u16 slave;		/* Backend iterator, 0 indicates the master service */
 	__u8 proto;		/* L4 protocol, currently not used (set to 0) */
-	__u8 pad[3];
+	__u8 scope;		/* LB_LOOKUP_SCOPE_* for externalTrafficPolicy=Local */
+	__u8 pad[2];
 };
 
 struct lb4_service {
