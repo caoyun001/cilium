@@ -262,7 +262,6 @@ static __always_inline int __sock4_xlate_fwd(struct bpf_sock_addr *ctx,
 	 */
 	svc = lb4_lookup_service(&key);
 	if (!svc) {
-		key.dport = orig_key.dport;
 		svc = sock4_nodeport_wildcard_lookup(&key, true, in_hostns);
 		if (svc && !lb4_svc_is_nodeport(svc))
 			svc = NULL;
@@ -359,14 +358,12 @@ static __always_inline int __sock4_bind(struct bpf_sock *ctx,
 		return 0;
 
 	svc = lb4_lookup_service(&key);
-	if (!svc) {
+	if (!svc)
 		/* Perform a wildcard lookup for the case where the caller
 		 * tries to bind to loopback or an address with host identity
 		 * (without remote hosts).
 		 */
-		key.dport = ctx_src_port(ctx);
 		svc = sock4_nodeport_wildcard_lookup(&key, false, true);
-	}
 
 	/* If the sockaddr of this socket overlaps with a NodePort,
 	 * LoadBalancer or ExternalIP service. We must reject this
@@ -413,7 +410,6 @@ static __always_inline int __sock4_xlate_rev(struct bpf_sock_addr *ctx,
 		if (!svc) {
 			const bool in_hostns = ctx_in_hostns(ctx_full, NULL);
 
-			svc_key.dport = val->port;
 			svc = sock4_nodeport_wildcard_lookup(&svc_key, true,
 							     in_hostns);
 			if (svc && !lb4_svc_is_nodeport(svc))
@@ -651,7 +647,6 @@ static __always_inline int __sock6_bind(struct bpf_sock *ctx)
 
 	svc = lb6_lookup_service(&key);
 	if (!svc) {
-		key.dport = ctx_src_port(ctx);
 		svc = sock6_nodeport_wildcard_lookup(&key, false, true);
 		if (!svc)
 			return sock6_bind_v4_in_v6(ctx);
@@ -698,7 +693,6 @@ static __always_inline int __sock6_xlate_fwd(struct bpf_sock_addr *ctx,
 
 	svc = lb6_lookup_service(&key);
 	if (!svc) {
-		key.dport = orig_key.dport;
 		svc = sock6_nodeport_wildcard_lookup(&key, true, in_hostns);
 		if (svc && !lb6_svc_is_nodeport(svc))
 			svc = NULL;
@@ -819,7 +813,6 @@ static __always_inline int __sock6_xlate_rev(struct bpf_sock_addr *ctx)
 		if (!svc) {
 			const bool in_hostns = ctx_in_hostns(ctx, NULL);
 
-			svc_key.dport = val->port;
 			svc = sock6_nodeport_wildcard_lookup(&svc_key, true,
 							     in_hostns);
 			if (svc && !lb6_svc_is_nodeport(svc))
